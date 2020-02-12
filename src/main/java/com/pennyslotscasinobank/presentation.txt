@@ -1,0 +1,4 @@
+uses BigDecimal for balance (better precision. can use NumberFormat for localization). ie: stock that is worth < 1 penny per share. uses HALF_EVEN which is what bankers use which means if decimal is 5, rounds down if even, rounds up if odd. ie: 7.5 rounds to 8, 6.5 rounds to 6
+throws exceptions
+slot game
+using UUID (universally unique identifier)
