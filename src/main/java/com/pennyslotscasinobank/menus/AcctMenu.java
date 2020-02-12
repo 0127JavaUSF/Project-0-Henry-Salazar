@@ -24,9 +24,10 @@ public class AcctMenu implements View {
 		System.out.println("1) Make a deposit");
 		System.out.println("2) Make a withdrawal");
 		System.out.println("3) Transfer money");
-		System.out.println("4) Edit account");
-		System.out.println("5) Close account");
-		System.out.println("6) Play slot machine");
+		System.out.println("4) Recent Activity");
+		System.out.println("5) Edit account");
+		System.out.println("6) Close account");
+		System.out.println("7) Play slot machine");
 		System.out.println("0) Return to Main Menu");
 	}
 
@@ -34,7 +35,7 @@ public class AcctMenu implements View {
 	public View selectOption() {
 
 		//process menu option
-		int option = InputUtil.readInt(0, 6);
+		int option = InputUtil.readInt(0, 7);
 		switch(option) {
 		case 1:
 			return new DepositMenu();
@@ -43,10 +44,12 @@ public class AcctMenu implements View {
 		case 3:
 			return new TransferMenu();
 		case 4:
-			return new EditAcctMenu();
+			return new RecentActivityMenu();
 		case 5:
-			return new CloseAcctMenu();
+			return new EditAcctMenu();
 		case 6:
+			return new CloseAcctMenu();
+		case 7:
 			return new SlotMachineMenu();
 		case 0:
 			return new MainMenu();

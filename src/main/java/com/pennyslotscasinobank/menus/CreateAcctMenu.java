@@ -47,7 +47,7 @@ public class CreateAcctMenu implements View {
 			
 			data.getAcctHolders().add(data.getUser());
 
-			System.out.println("Account creation successful");
+			System.out.format("Account creation successful #%d\n", acct.getAcctNumber());
 		}
 		catch(InvalidUserException e) {
 			MenuUtil.printInvalidUserError();

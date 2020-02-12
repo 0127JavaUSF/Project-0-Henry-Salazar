@@ -226,7 +226,7 @@ public class MenuUtil {
 		
 		Data data = Data.getData();
 		
-		System.out.println("\nAccount Summary");
+		System.out.println("\nAccount Snapshot");
 		
 		//show account type and account number
 		System.out.format("%s #%d\n", acct.getType().toString(), acct.getAcctNumber());

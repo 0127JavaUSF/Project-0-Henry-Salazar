@@ -5,9 +5,11 @@ import java.sql.SQLException;
 
 import com.pennyslotcasinobank.daos.CasinoAcctDAO;
 import com.pennyslotcasinobank.exceptions.InvalidAcctException;
+import com.pennyslotcasinobank.exceptions.InvalidUserException;
 import com.pennyslotcasinobank.exceptions.NetworkException;
 import com.pennyslotscasinobank.Account;
 import com.pennyslotscasinobank.Data;
+import com.pennyslotscasinobank.User;
 import com.pennyslotscasinobank.View;
 
 public class DepositMenu implements View {
@@ -33,8 +35,9 @@ public class DepositMenu implements View {
 		CasinoAcctDAO acctDAO = new CasinoAcctDAO();
 		try {
 			Account acct = Data.getData().getSelectedAcct();
+			User user = Data.getData().getUser();
 			
-			BigDecimal newBalance = acctDAO.deposit(deposit, acct.getAcctNumber());
+			BigDecimal newBalance = acctDAO.deposit(deposit, user.getUsername(), acct.getAcctNumber());
 			
 			acct.setBalance(newBalance);
 					
@@ -42,6 +45,9 @@ public class DepositMenu implements View {
 		}
 		catch (InvalidAcctException e) {
 			MenuUtil.printInvalidAcctError();
+		}
+		catch (InvalidUserException e) {
+			MenuUtil.printInvalidUserError();
 		}
 		catch(NetworkException e) {
 			MenuUtil.printNetworkError();

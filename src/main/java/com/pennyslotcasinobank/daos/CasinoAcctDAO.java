@@ -5,16 +5,20 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
+import com.pennyslotcasinobank.exceptions.BalanceNot0Exception;
 import com.pennyslotcasinobank.exceptions.ExceedsBalanceException;
 import com.pennyslotcasinobank.exceptions.InvalidAcctException;
 import com.pennyslotcasinobank.exceptions.InvalidUserException;
 import com.pennyslotcasinobank.exceptions.NetworkException;
 import com.pennyslotscasinobank.Account;
 import com.pennyslotscasinobank.ConnectionUtil;
+import com.pennyslotscasinobank.Transaction;
 
 public class CasinoAcctDAO implements AcctDAO {
 	
@@ -106,7 +110,7 @@ public class CasinoAcctDAO implements AcctDAO {
 	}
 	
 	@Override
-	public void closeAcct(int acctNumber) throws NetworkException, SQLException, InvalidAcctException {
+	public void closeAcct(int acctNumber) throws NetworkException, SQLException, BalanceNot0Exception, InvalidAcctException {
 				
 		//connect to JDBC
 		Connection connection = null;
@@ -120,14 +124,49 @@ public class CasinoAcctDAO implements AcctDAO {
 			
 			//transaction
 			connection.setAutoCommit(false);
-
-			String sql = "DELETE FROM acct_holders where acct_id = ?;";
-
+			
+			String sql = "Select balance from accts WHERE id = ?;";
+			
 			PreparedStatement prepared = connection.prepareStatement(sql);
 			prepared.setInt(1, acctNumber);
 			
-			prepared.execute();
+			ResultSet result = prepared.executeQuery();
+			if(result.next()) {
+				BigDecimal balance = result.getBigDecimal("balance");
+				if(balance.doubleValue() > .01) {
+					
+					if(connection != null) {			
+						connection.rollback();
+					}
+					throw new BalanceNot0Exception();
+				}
+			}
 
+			sql = "DELETE FROM acct_holders where acct_id = ?;";
+
+			prepared = connection.prepareStatement(sql);
+			prepared.setInt(1, acctNumber);
+			
+			prepared.execute();
+			
+			//delete all transactions with acct number
+			sql = "DELETE FROM transactions where acct_id = ?;";
+
+			prepared = connection.prepareStatement(sql);
+			prepared.setInt(1, acctNumber);
+			
+			prepared.execute();
+			
+			//delete all transfers with acct number
+			//in real life the acct would not be deleted from table to preserve history
+			sql = "DELETE FROM transfers where from_acct_id = ? OR to_acct_id = ?;";
+
+			prepared = connection.prepareStatement(sql);
+			prepared.setInt(1, acctNumber);
+			prepared.setInt(2, acctNumber);
+			
+			prepared.execute();
+			
 			//delete acct
 			sql = "DELETE FROM accts where id = ?;";
 			
@@ -196,27 +235,72 @@ public class CasinoAcctDAO implements AcctDAO {
 	
 	//returns the new balance
 	@Override
-	public BigDecimal deposit(BigDecimal deposit, int acctNumber) throws NetworkException, SQLException, InvalidAcctException {
+	public BigDecimal deposit(BigDecimal deposit, String username, int acctNumber) throws NetworkException, SQLException, InvalidAcctException, InvalidUserException {
 
 		if(deposit.doubleValue() < 0) {
 			deposit = deposit.multiply(new BigDecimal(-1.0));
 		}
 		
 		//connect to JDBC
-		try(Connection connection = ConnectionUtil.getConnection()) {
+		Connection connection = null;
+		try {
+			connection = ConnectionUtil.getConnection();
 			
 			//if connection issue
 			if(connection == null) {
 				throw new NetworkException();
 			}
 
+			//transaction
+			connection.setAutoCommit(false);
+			
 			BigDecimal newBalance = depositA(connection, deposit, acctNumber);
 			
-			return newBalance;
-
+			//insert into transactions
+			//get user id first
+			String sql = "SELECT id FROM users WHERE username = ?;";
+			
+			PreparedStatement prepared = connection.prepareStatement(sql);
+			prepared.setString(1, username);
+			
+			ResultSet result = prepared.executeQuery();
+			if(result.next()) {
+				
+				UUID userID = java.util.UUID.fromString( result.getString("id") );
+				
+				sql = "INSERT INTO transactions (user_id, acct_id, type, amount) VALUES (?, ?, 1, ?);";
+				
+				prepared = connection.prepareStatement(sql);
+				prepared.setObject(1, userID);
+				prepared.setInt(2, acctNumber);
+				prepared.setObject(3, deposit);
+				
+				prepared.execute();
+				
+				connection.commit();
+				
+				return newBalance;
+			}
+			else {
+				if(connection != null) {
+					connection.rollback();
+				}
+				throw new InvalidUserException();
+			}
+			
 		} catch (SQLException e) {
 			
+			if(connection != null) {
+				connection.rollback();
+			}
 			throw new SQLException();
+		}
+		finally {
+			
+			//close connection
+			if(connection != null) {
+				connection.close();
+			}
 		}
 	}
 	
@@ -232,7 +316,7 @@ public class CasinoAcctDAO implements AcctDAO {
 
 		if(result.next()) {
 			
-			BigDecimal newBalance = new BigDecimal( result.getDouble("balance") );
+			BigDecimal newBalance = result.getBigDecimal("balance");
 			return newBalance;
 		}
 		else {
@@ -285,9 +369,92 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
+	public List<Transaction> getRecentActivity(int acctNumber) throws NetworkException, SQLException {
+		
+		//connect to JDBC
+		Connection connection = null;
+		try {
+			connection = ConnectionUtil.getConnection();
+			
+			//if connection issue
+			if(connection == null) {
+				throw new NetworkException();
+			}
+
+			//transaction
+			connection.setAutoCommit(false);
+
+			String sql = "SELECT date, type, amount FROM transactions WHERE acct_id = ? ORDER BY date DESC LIMIT 32";
+			
+			PreparedStatement prepared = connection.prepareStatement(sql);
+			prepared.setInt(1, acctNumber);
+
+			List<Transaction> transactions = new LinkedList<Transaction>();
+			ResultSet result = prepared.executeQuery();
+			while(result.next()) {
+				
+				Transaction trans = new Transaction();
+				trans.Init(
+						new BigDecimal( result.getDouble("amount") ),
+						result.getTimestamp("date"),
+						0,
+						0,
+						result.getInt("type"));
+				
+				transactions.add(trans);
+			}
+			
+			sql = "SELECT date, to_acct_id, from_acct_id, amount FROM transfers WHERE to_acct_id = ? OR from_acct_id = ? ORDER BY date DESC LIMIT 32";
+			
+			prepared = connection.prepareStatement(sql);
+			prepared.setInt(1, acctNumber);
+			prepared.setInt(2, acctNumber);
+
+			result = prepared.executeQuery();
+			while(result.next()) {
+				
+				Transaction trans = new Transaction();
+				trans.Init(
+						new BigDecimal( result.getDouble("amount") ),
+						result.getTimestamp("date"),
+						result.getInt("from_acct_id"),
+						result.getInt("to_acct_id"),
+						Transaction.TYPE_TRANSFER);
+
+				transactions.add(trans);
+			}
+			
+			connection.commit();
+			
+			//sort by date
+			Comparator<Transaction> comparator = Collections.reverseOrder(new Comparator<Transaction>() {
+				  public int compare(Transaction t1, Transaction t2) {
+					    return t1.getTimestamp().compareTo(t2.getTimestamp());
+					  }
+				  });
+			
+			Collections.sort(transactions, comparator);
+
+			return transactions;
+
+		} catch (SQLException e) {
+			if(connection != null) {
+				connection.rollback();
+			}
+			throw new SQLException();
+		}
+		finally {
+			
+			//close connection
+			if(connection != null) {
+				connection.close();
+			}
+		}
+	}
+	
 	//returns the new balance
 	@Override
-	public BigDecimal withdrawal(BigDecimal withdrawal, int acctNumber) throws NetworkException, SQLException, ExceedsBalanceException, InvalidAcctException {
+	public BigDecimal withdrawal(BigDecimal withdrawal, String username, int acctNumber) throws NetworkException, SQLException, ExceedsBalanceException, InvalidAcctException, InvalidUserException {
 
 		if(withdrawal.doubleValue() < 0) {
 			withdrawal = withdrawal.multiply(new BigDecimal(-1.0));
@@ -308,9 +475,37 @@ public class CasinoAcctDAO implements AcctDAO {
 
 			BigDecimal newBalance = withdrawalA(connection, withdrawal, acctNumber);
 			
-			connection.commit();
+			//insert into transactions
+			//get user id first
+			String sql = "SELECT id FROM users WHERE username = ?;";
 			
-			return newBalance;
+			PreparedStatement prepared = connection.prepareStatement(sql);
+			prepared.setString(1, username);
+			
+			ResultSet result = prepared.executeQuery();
+			if(result.next()) {
+				
+				UUID userID = java.util.UUID.fromString( result.getString("id") );
+				
+				sql = "INSERT INTO transactions (user_id, acct_id, type, amount) VALUES (?, ?, 2, ?);";
+				
+				prepared = connection.prepareStatement(sql);
+				prepared.setObject(1, userID);
+				prepared.setInt(2, acctNumber);
+				prepared.setObject(3, withdrawal);
+				
+				prepared.execute();
+				
+				connection.commit();
+				
+				return newBalance;
+			}
+			else {
+				if(connection != null) {
+					connection.rollback();
+				}
+				throw new InvalidUserException();
+			}
 		}
 		catch (SQLException e) {
 			
@@ -338,7 +533,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		ResultSet result = prepared.executeQuery();
 		if(result.next()) {
 			
-			BigDecimal balance = new BigDecimal(result.getDouble("balance"));
+			BigDecimal balance = result.getBigDecimal("balance");
 			
 			if(balance.doubleValue() - withdrawal.doubleValue() < 0) {
 				if(connection != null) {
@@ -357,7 +552,7 @@ public class CasinoAcctDAO implements AcctDAO {
 
 			if(result.next()) {
 				
-				BigDecimal newBalance = new BigDecimal( result.getDouble("balance") );
+				BigDecimal newBalance = result.getBigDecimal("balance");
 								
 				return newBalance;
 			}
@@ -377,7 +572,7 @@ public class CasinoAcctDAO implements AcctDAO {
 	}
 	
 	@Override
-	public void transfer(BigDecimal amount, int fromAcctNumber, int toAcctNumber) throws NetworkException, SQLException, ExceedsBalanceException, InvalidAcctException {
+	public void transfer(BigDecimal amount, String username, int fromAcctNumber, int toAcctNumber) throws NetworkException, SQLException, ExceedsBalanceException, InvalidAcctException, InvalidUserException {
 		
 		if(fromAcctNumber == toAcctNumber) {
 			throw new InvalidAcctException();
@@ -400,7 +595,36 @@ public class CasinoAcctDAO implements AcctDAO {
 
 			depositA(connection, amount, toAcctNumber);
 			
-			connection.commit();
+			//insert into transfers table
+			//get user id first
+			String sql = "SELECT id FROM users WHERE username = ?;";
+			
+			PreparedStatement prepared = connection.prepareStatement(sql);
+			prepared.setString(1, username);
+			
+			ResultSet result = prepared.executeQuery();
+			if(result.next()) {
+				
+				UUID userID = java.util.UUID.fromString( result.getString("id") );
+				
+				sql = "INSERT INTO transfers (user_id, to_acct_id, from_acct_id, amount) VALUES (?, ?, ?, ?);";
+				
+				prepared = connection.prepareStatement(sql);
+				prepared.setObject(1, userID);
+				prepared.setInt(2, toAcctNumber);
+				prepared.setInt(3, fromAcctNumber);
+				prepared.setObject(4, amount);
+				
+				prepared.execute();
+				
+				connection.commit();
+			}
+			else {
+				if(connection != null) {
+					connection.rollback();
+				}
+				throw new InvalidUserException();
+			}
 		}
 		catch (SQLException e) {
 			

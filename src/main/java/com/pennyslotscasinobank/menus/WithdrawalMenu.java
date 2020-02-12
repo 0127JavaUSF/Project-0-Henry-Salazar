@@ -6,9 +6,11 @@ import java.sql.SQLException;
 import com.pennyslotcasinobank.daos.CasinoAcctDAO;
 import com.pennyslotcasinobank.exceptions.ExceedsBalanceException;
 import com.pennyslotcasinobank.exceptions.InvalidAcctException;
+import com.pennyslotcasinobank.exceptions.InvalidUserException;
 import com.pennyslotcasinobank.exceptions.NetworkException;
 import com.pennyslotscasinobank.Account;
 import com.pennyslotscasinobank.Data;
+import com.pennyslotscasinobank.User;
 import com.pennyslotscasinobank.View;
 
 public class WithdrawalMenu implements View {
@@ -34,8 +36,9 @@ public class WithdrawalMenu implements View {
 		CasinoAcctDAO acctDAO = new CasinoAcctDAO();
 		try {
 			Account acct = Data.getData().getSelectedAcct();
+			User user = Data.getData().getUser();
 			
-			BigDecimal newBalance = acctDAO.withdrawal(withdrawal, acct.getAcctNumber());
+			BigDecimal newBalance = acctDAO.withdrawal(withdrawal, user.getUsername(), acct.getAcctNumber());
 			
 			acct.setBalance(newBalance);
 			
@@ -46,6 +49,9 @@ public class WithdrawalMenu implements View {
 		}
 		catch (InvalidAcctException e) {
 			MenuUtil.printInvalidAcctError();
+		}
+		catch (InvalidUserException e) {
+			MenuUtil.printInvalidUserError();
 		}
 		catch(NetworkException e) {
 			MenuUtil.printNetworkError();

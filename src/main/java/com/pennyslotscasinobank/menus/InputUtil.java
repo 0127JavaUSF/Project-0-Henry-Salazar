@@ -92,7 +92,7 @@ public class InputUtil {
 			}
 
 			//user did not enter a positive integer
-			System.out.println("Enter a positive value");
+			System.out.println("Enter a positive whole number");
 		}
 		//prompt for input again
 		while(true);

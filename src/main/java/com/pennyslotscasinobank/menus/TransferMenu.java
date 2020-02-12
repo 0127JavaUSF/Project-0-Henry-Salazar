@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import com.pennyslotcasinobank.daos.CasinoAcctDAO;
 import com.pennyslotcasinobank.exceptions.ExceedsBalanceException;
 import com.pennyslotcasinobank.exceptions.InvalidAcctException;
+import com.pennyslotcasinobank.exceptions.InvalidUserException;
 import com.pennyslotcasinobank.exceptions.NetworkException;
 import com.pennyslotscasinobank.Account;
 import com.pennyslotscasinobank.Data;
@@ -83,7 +84,7 @@ public class TransferMenu implements View {
 			//use service to make transfer
 			try {
 				Account selected = data.getSelectedAcct();
-				acctDAO.transfer(transferAmount, selected.getAcctNumber(), transferTo.getAcctNumber());
+				acctDAO.transfer(transferAmount, data.getUser().getUsername(), selected.getAcctNumber(), transferTo.getAcctNumber());
 
 				selected.setBalance(selected.getBalance().subtract(transferAmount));
 				transferTo.setBalance(transferTo.getBalance().add(transferAmount));
@@ -91,7 +92,9 @@ public class TransferMenu implements View {
 				System.out.println("Success");
 				
 				//show account summary of both accounts
+				System.out.println("\nTransfer from:");
 				MenuUtil.showAcctSummary(data.getSelectedAcct());
+				System.out.println("\nTransfer To:");
 				MenuUtil.showAcctSummary(transferTo);
 				return;
 			}
@@ -100,6 +103,9 @@ public class TransferMenu implements View {
 			}
 			catch (InvalidAcctException e) {
 				MenuUtil.printInvalidAcctError();
+			}
+			catch (InvalidUserException e) {
+				MenuUtil.printInvalidUserError();
 			}
 			catch(NetworkException e) {
 				MenuUtil.printNetworkError();

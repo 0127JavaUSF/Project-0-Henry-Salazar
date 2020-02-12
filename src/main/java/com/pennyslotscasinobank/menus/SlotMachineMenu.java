@@ -7,9 +7,11 @@ import java.util.Random;
 import com.pennyslotcasinobank.daos.CasinoAcctDAO;
 import com.pennyslotcasinobank.exceptions.ExceedsBalanceException;
 import com.pennyslotcasinobank.exceptions.InvalidAcctException;
+import com.pennyslotcasinobank.exceptions.InvalidUserException;
 import com.pennyslotcasinobank.exceptions.NetworkException;
 import com.pennyslotscasinobank.Account;
 import com.pennyslotscasinobank.Data;
+import com.pennyslotscasinobank.User;
 import com.pennyslotscasinobank.View;
 
 public class SlotMachineMenu implements View {
@@ -21,6 +23,7 @@ public class SlotMachineMenu implements View {
 		Account acct = Data.getData().getSelectedAcct();
 		BigDecimal balance = acct.getBalance();
 		BigDecimal bet = new BigDecimal(.01);
+		User user = Data.getData().getUser();
 		
 		System.out.println("\nSlot Machine");
 
@@ -41,7 +44,7 @@ public class SlotMachineMenu implements View {
 					
 					if(diff.doubleValue() < 0) {
 						try {
-							BigDecimal newBalance = acctDAO.withdrawal(diff, acct.getAcctNumber());
+							BigDecimal newBalance = acctDAO.withdrawal(diff, user.getUsername(), acct.getAcctNumber());
 							
 							acct.setBalance(newBalance);
 						}
@@ -50,6 +53,9 @@ public class SlotMachineMenu implements View {
 						}
 						catch (InvalidAcctException e) {
 							MenuUtil.printInvalidAcctError();
+						}
+						catch (InvalidUserException e) {
+							MenuUtil.printInvalidUserError();
 						}
 						catch (NetworkException e) {
 							MenuUtil.printNetworkError();
@@ -60,12 +66,15 @@ public class SlotMachineMenu implements View {
 					}
 					else {
 						try {
-							BigDecimal newBalance = acctDAO.deposit(diff, acct.getAcctNumber());
+							BigDecimal newBalance = acctDAO.deposit(diff, user.getUsername(), acct.getAcctNumber());
 							
 							acct.setBalance(newBalance);
 						}
 						catch (InvalidAcctException e) {
 							MenuUtil.printInvalidAcctError();
+						}
+						catch (InvalidUserException e) {
+							MenuUtil.printInvalidUserError();
 						}
 						catch (NetworkException e) {
 							MenuUtil.printNetworkError();

@@ -18,6 +18,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import com.pennyslotcasinobank.daos.CasinoAcctDAO;
 import com.pennyslotscasinobank.Account;
+import com.pennyslotscasinobank.User;
 
 @RunWith(MockitoJUnitRunner.class)
 public class CasinoAcctDAOMockTest {
@@ -82,9 +83,9 @@ public class CasinoAcctDAOMockTest {
 	public void depositTest() {
 		
 		try {
-			when(acctDAO.deposit(new BigDecimal(100.0), acct1.getAcctNumber())).thenReturn(new BigDecimal(200.0)); //returns new balance
+			when(acctDAO.deposit(new BigDecimal(100.0), "username", acct1.getAcctNumber())).thenReturn(new BigDecimal(200.0)); //returns new balance
 
-			assertEquals("deposit should return 200.0", new BigDecimal(200.0), acctDAO.deposit(new BigDecimal(100.0), acct1.getAcctNumber()));
+			assertEquals("deposit should return 200.0", new BigDecimal(200.0), acctDAO.deposit(new BigDecimal(100.0), "username", acct1.getAcctNumber()));
 		}
 		catch(Exception e) {
 			
@@ -108,9 +109,9 @@ public class CasinoAcctDAOMockTest {
 	public void withdrawalTest() {
 		
 		try {
-			when(acctDAO.withdrawal(new BigDecimal(200.0), acct2.getAcctNumber())).thenReturn(new BigDecimal(50.0));
+			when(acctDAO.withdrawal(new BigDecimal(200.0), "username", acct2.getAcctNumber())).thenReturn(new BigDecimal(50.0));
 				
-			assertEquals("withdrawal should return 50.0", new BigDecimal(50.0), acctDAO.withdrawal(new BigDecimal(200.0), acct2.getAcctNumber()));
+			assertEquals("withdrawal should return 50.0", new BigDecimal(50.0), acctDAO.withdrawal(new BigDecimal(200.0), "username", acct2.getAcctNumber()));
 		}
 		catch(Exception e) {
 			

@@ -3,6 +3,7 @@ package com.pennyslotscasinobank.menus;
 import java.sql.SQLException;
 
 import com.pennyslotcasinobank.daos.CasinoAcctDAO;
+import com.pennyslotcasinobank.exceptions.BalanceNot0Exception;
 import com.pennyslotcasinobank.exceptions.InvalidAcctException;
 import com.pennyslotcasinobank.exceptions.NetworkException;
 import com.pennyslotscasinobank.Account;
@@ -40,6 +41,12 @@ public class CloseAcctMenu implements View {
 				
 				System.out.println("Account closed");
 
+			}
+			catch (BalanceNot0Exception e) {
+				System.out.println("Balance not 0 error");
+				
+				nextMenu = new AcctMenu(true);
+				return;
 			}
 			catch (InvalidAcctException e) {
 				MenuUtil.printInvalidAcctError();
