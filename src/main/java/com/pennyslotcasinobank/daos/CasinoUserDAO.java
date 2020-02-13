@@ -17,6 +17,7 @@ import com.pennyslotscasinobank.User;
 
 public class CasinoUserDAO implements UserDAO {
 	
+	//returns a list of users from the account number
 	@Override
 	public List<User> getUsersFromAcctNumber(int acctNumber) throws NetworkException, SQLException, InvalidAcctException {
 
@@ -92,6 +93,7 @@ public class CasinoUserDAO implements UserDAO {
 		}
 	}
 	
+	//returns a User object given a username
 	@Override
 	public User getUserFromUsername(String username) throws NetworkException, SQLException, InvalidUserException {
 		
@@ -103,6 +105,7 @@ public class CasinoUserDAO implements UserDAO {
 				throw new NetworkException();
 			}
 
+			//get user
 			String sql = "SELECT first_name, last_name FROM users WHERE username = ?;";
 
 			PreparedStatement prepared = connection.prepareStatement(sql);
@@ -131,6 +134,7 @@ public class CasinoUserDAO implements UserDAO {
 		}
 	}
 	
+	//verifies username and password in database
 	@Override
 	public void logIn(User user, String username, String password) throws NetworkException, SQLException, WrongLogInException {
 		
@@ -158,6 +162,7 @@ public class CasinoUserDAO implements UserDAO {
 					throw new WrongLogInException();
 				}
 				
+				//set first and last name
 				user.Init(
 						result.getString("first_name"),
 						result.getString("last_name"),
@@ -173,7 +178,7 @@ public class CasinoUserDAO implements UserDAO {
 		}
 	}
 	
-	//returns user ID
+	//register new user
 	@Override
 	public void register(String firstName, String lastName, String username, String password) throws NetworkException, SQLException, UsernameAlreadyExistsException {
 		
@@ -193,11 +198,12 @@ public class CasinoUserDAO implements UserDAO {
 			prepared.setString(1, username);
 			ResultSet result = prepared.executeQuery();
 			if(result.next()) {
+				
 				//throw username exists exception
 				throw new UsernameAlreadyExistsException();
 			}
 			
-			//insert into database
+			//insert user into database
 			sql = "INSERT INTO users (first_name, last_name, username, password) VALUES (?, ?, ?, ?);";
 
 			prepared = connection.prepareStatement(sql);
@@ -215,6 +221,7 @@ public class CasinoUserDAO implements UserDAO {
 		}
 	}
 	
+	//helper function to initialize user
 	private void userFromResultSet(ResultSet result, User user) throws SQLException {
 		
 		user.Init(

@@ -22,7 +22,7 @@ import com.pennyslotscasinobank.Transaction;
 
 public class CasinoAcctDAO implements AcctDAO {
 	
-	//returns the account number
+	//creates an account
 	@Override
 	public Account createAcct(Account.Type type, String username) throws NetworkException, SQLException, InvalidUserException {
 				
@@ -40,6 +40,7 @@ public class CasinoAcctDAO implements AcctDAO {
 			//both the account and account holder need to be created at the same time
 			connection.setAutoCommit(false);
 
+			//create account
 			String sql = "INSERT INTO accts (type) VALUES (?) RETURNING id;";
 
 			PreparedStatement prepared = connection.prepareStatement(sql);
@@ -61,6 +62,7 @@ public class CasinoAcctDAO implements AcctDAO {
 				if(result.next()) {
 					UUID userID = java.util.UUID.fromString( result.getString("id") );
 					
+					//create account holder
 					sql = "INSERT INTO acct_holders (user_id, acct_id, is_primary) VALUES (?, ?, ?);";
 					
 					prepared = connection.prepareStatement(sql);
@@ -109,6 +111,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
+	//closes the account
 	@Override
 	public void closeAcct(int acctNumber) throws NetworkException, SQLException, BalanceNot0Exception, InvalidAcctException {
 				
@@ -125,11 +128,13 @@ public class CasinoAcctDAO implements AcctDAO {
 			//transaction
 			connection.setAutoCommit(false);
 			
+			//get balance
 			String sql = "Select balance from accts WHERE id = ?;";
 			
 			PreparedStatement prepared = connection.prepareStatement(sql);
 			prepared.setInt(1, acctNumber);
 			
+			//if balance > one penny
 			ResultSet result = prepared.executeQuery();
 			if(result.next()) {
 				BigDecimal balance = result.getBigDecimal("balance");
@@ -138,10 +143,12 @@ public class CasinoAcctDAO implements AcctDAO {
 					if(connection != null) {			
 						connection.rollback();
 					}
+					//can not close account if balance
 					throw new BalanceNot0Exception();
 				}
 			}
 
+			//first delete account holders
 			sql = "DELETE FROM acct_holders where acct_id = ?;";
 
 			prepared = connection.prepareStatement(sql);
@@ -158,7 +165,7 @@ public class CasinoAcctDAO implements AcctDAO {
 			prepared.execute();
 			
 			//delete all transfers with acct number
-			//in real life the acct would not be deleted from table to preserve history
+			//in real life the acct would not be deleted because acct history would need to be preserved
 			sql = "DELETE FROM transfers where from_acct_id = ? OR to_acct_id = ?;";
 
 			prepared = connection.prepareStatement(sql);
@@ -193,6 +200,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
+	//get the account from the account number
 	@Override
 	public Account getFromAcctNum(int acctNumber) throws NetworkException, SQLException, InvalidAcctException {
 		
@@ -204,6 +212,7 @@ public class CasinoAcctDAO implements AcctDAO {
 				throw new NetworkException();
 			}
 
+			//get account from account number
 			String sql = "SELECT * from accts WHERE id = ?;";
 
 			PreparedStatement prepared = connection.prepareStatement(sql);
@@ -215,13 +224,14 @@ public class CasinoAcctDAO implements AcctDAO {
 				
 				Account acct = new Account();
 				
+				//convert from SQL type to Java account type
 				Account.Type type = Account.fromSQLType( result.getInt("type") );
 				acct.Init(
 						type, 
 						result.getBigDecimal("balance"), 
 						result.getInt("id"));
 				
-				return acct;
+				return acct; //return new account
 			}
 			else {
 				throw new InvalidAcctException();
@@ -256,7 +266,8 @@ public class CasinoAcctDAO implements AcctDAO {
 			
 			BigDecimal newBalance = depositA(connection, deposit, acctNumber);
 			
-			//insert into transactions
+			//insert into transactions table
+			
 			//get user id first
 			String sql = "SELECT id FROM users WHERE username = ?;";
 			
@@ -267,7 +278,8 @@ public class CasinoAcctDAO implements AcctDAO {
 			if(result.next()) {
 				
 				UUID userID = java.util.UUID.fromString( result.getString("id") );
-				
+			
+				//create transaction record
 				sql = "INSERT INTO transactions (user_id, acct_id, type, amount) VALUES (?, ?, 1, ?);";
 				
 				prepared = connection.prepareStatement(sql);
@@ -306,6 +318,7 @@ public class CasinoAcctDAO implements AcctDAO {
 	
 	private BigDecimal depositA(Connection connection, BigDecimal deposit, int acctNumber) throws NetworkException, SQLException, InvalidAcctException {
 	
+		//update balance
 		String sql = "UPDATE accts SET balance = balance + ? WHERE id = ? RETURNING balance;";
 
 		PreparedStatement prepared = connection.prepareStatement(sql);
@@ -324,6 +337,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
+	//given the username, returns a list of accounts
 	public List<Account> getAccts(String username) throws NetworkException, SQLException, InvalidUserException {
 		
 		//connect to JDBC
@@ -334,6 +348,8 @@ public class CasinoAcctDAO implements AcctDAO {
 				throw new NetworkException();
 			}
 
+			//nested query
+			//get accounts with matching account numbers (from account holders table). username may have multiple accounts
 			String sql = "SELECT * from accts WHERE id IN (SELECT acct_id FROM acct_holders WHERE user_id = (SELECT id from users WHERE username = ?));";
 
 			PreparedStatement prepared = connection.prepareStatement(sql);
@@ -343,10 +359,11 @@ public class CasinoAcctDAO implements AcctDAO {
 
 			List<Account> accts = new LinkedList<Account>();
 			boolean hasResult = false;
-			while(result.next()) {
+			while(result.next()) { //loop over results
 				
 				hasResult = true;
 				
+				//create account and add to List<>
 				Account.Type type =  Account.fromSQLType( result.getInt("type") );
 				Account acct = new Account(
 						type,
@@ -369,6 +386,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
+	//returns a list of recent transactions
 	public List<Transaction> getRecentActivity(int acctNumber) throws NetworkException, SQLException {
 		
 		//connect to JDBC
@@ -384,6 +402,7 @@ public class CasinoAcctDAO implements AcctDAO {
 			//transaction
 			connection.setAutoCommit(false);
 
+			//get transaction history sorted by date
 			String sql = "SELECT date, type, amount FROM transactions WHERE acct_id = ? ORDER BY date DESC LIMIT 32";
 			
 			PreparedStatement prepared = connection.prepareStatement(sql);
@@ -404,6 +423,8 @@ public class CasinoAcctDAO implements AcctDAO {
 				transactions.add(trans);
 			}
 			
+			//get transfer history sorted by date
+			//transfers use a different table because the # of columns is different
 			sql = "SELECT date, to_acct_id, from_acct_id, amount FROM transfers WHERE to_acct_id = ? OR from_acct_id = ? ORDER BY date DESC LIMIT 32";
 			
 			prepared = connection.prepareStatement(sql);
@@ -426,7 +447,7 @@ public class CasinoAcctDAO implements AcctDAO {
 			
 			connection.commit();
 			
-			//sort by date
+			//sort transactions and transfers date
 			Comparator<Transaction> comparator = Collections.reverseOrder(new Comparator<Transaction>() {
 				  public int compare(Transaction t1, Transaction t2) {
 					    return t1.getTimestamp().compareTo(t2.getTimestamp());
@@ -435,6 +456,7 @@ public class CasinoAcctDAO implements AcctDAO {
 			
 			Collections.sort(transactions, comparator);
 
+			//return recent activity
 			return transactions;
 
 		} catch (SQLException e) {
@@ -474,8 +496,7 @@ public class CasinoAcctDAO implements AcctDAO {
 			connection.setAutoCommit(false);
 
 			BigDecimal newBalance = withdrawalA(connection, withdrawal, acctNumber);
-			
-			//insert into transactions
+						
 			//get user id first
 			String sql = "SELECT id FROM users WHERE username = ?;";
 			
@@ -487,6 +508,7 @@ public class CasinoAcctDAO implements AcctDAO {
 				
 				UUID userID = java.util.UUID.fromString( result.getString("id") );
 				
+				//insert into transactions table
 				sql = "INSERT INTO transactions (user_id, acct_id, type, amount) VALUES (?, ?, 2, ?);";
 				
 				prepared = connection.prepareStatement(sql);
@@ -525,6 +547,7 @@ public class CasinoAcctDAO implements AcctDAO {
 	
 	private BigDecimal withdrawalA(Connection connection, BigDecimal withdrawal, int acctNumber) throws NetworkException, SQLException, ExceedsBalanceException, InvalidAcctException {
 		
+		//get balance
 		String sql = "SELECT balance FROM accts WHERE id = ?;";
 
 		PreparedStatement prepared = connection.prepareStatement(sql);
@@ -535,13 +558,15 @@ public class CasinoAcctDAO implements AcctDAO {
 			
 			BigDecimal balance = result.getBigDecimal("balance");
 			
+			//if withdrawal is > balance
 			if(balance.doubleValue() - withdrawal.doubleValue() < 0) {
 				if(connection != null) {
 					connection.rollback();
 				}
-				throw new ExceedsBalanceException();
+				throw new ExceedsBalanceException(); //do not allow overdrafts
 			}
 			
+			//update acct balance
 			sql = "UPDATE accts SET balance = balance - ? WHERE id = ? RETURNING balance;";
 
 			prepared = connection.prepareStatement(sql);
@@ -571,6 +596,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
+	//account transfer
 	@Override
 	public void transfer(BigDecimal amount, String username, int fromAcctNumber, int toAcctNumber) throws NetworkException, SQLException, ExceedsBalanceException, InvalidAcctException, InvalidUserException {
 		
@@ -595,7 +621,6 @@ public class CasinoAcctDAO implements AcctDAO {
 
 			depositA(connection, amount, toAcctNumber);
 			
-			//insert into transfers table
 			//get user id first
 			String sql = "SELECT id FROM users WHERE username = ?;";
 			
@@ -607,6 +632,7 @@ public class CasinoAcctDAO implements AcctDAO {
 				
 				UUID userID = java.util.UUID.fromString( result.getString("id") );
 				
+				//insert into transfers table
 				sql = "INSERT INTO transfers (user_id, to_acct_id, from_acct_id, amount) VALUES (?, ?, ?, ?);";
 				
 				prepared = connection.prepareStatement(sql);
@@ -642,7 +668,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
-	//assumes user added to account is a secondary account holder because primary should already be added
+	//assumes user added to account is a secondary account holder because primary is added by createAcct
 	@Override
 	public void addUser(String username, int acctNumber) throws NetworkException, SQLException, InvalidAcctException, InvalidUserException {
 
@@ -687,6 +713,7 @@ public class CasinoAcctDAO implements AcctDAO {
 					throw new InvalidUserException();
 				}
 				
+				//create new account holder
 				sql = "INSERT INTO acct_holders (acct_id, user_id, is_primary) VALUES (?, ?, false) RETURNING id;";
 				
 				prepared = connection.prepareStatement(sql);
@@ -728,6 +755,7 @@ public class CasinoAcctDAO implements AcctDAO {
 		}
 	}
 	
+	//remove the user from the account
 	@Override
 	public void removeUser(String username, int acctNumber) throws NetworkException, SQLException, InvalidAcctException, InvalidUserException {
 		
@@ -744,6 +772,7 @@ public class CasinoAcctDAO implements AcctDAO {
 			//transaction
 			connection.setAutoCommit(false);
 
+			//get user ID
 			String sql = "SELECT id FROM users WHERE username = ?;";
 
 			PreparedStatement prepared = connection.prepareStatement(sql);
@@ -754,6 +783,7 @@ public class CasinoAcctDAO implements AcctDAO {
 				
 				UUID uuid = java.util.UUID.fromString( result.getString("id") );
 				
+				//delete account holder
 				sql = "DELETE FROM acct_holders WHERE acct_id = ? AND user_id = ? RETURNING 1;";
 				
 				prepared = connection.prepareStatement(sql);
